@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Assignment prompt and rubric files
+2627-HK1-AI-GK.pdf
+RUBRIC_GK.docx
+
+# Helper files
+test_all.py
+HUONG_DAN_CHAY.txt
