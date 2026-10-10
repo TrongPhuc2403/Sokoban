@@ -53,7 +53,7 @@ class SokobanTwoPlayerEnv:
                     self.walls.add(pos)
                 elif ch in ('1', 'A'):
                     self.initial_agent1 = pos
-                elif ch in ('2', 'B_AGENT', 'Z'):
+                elif ch in ('2', 'Z'):
                     self.initial_agent2 = pos
                 elif ch == 'B':
                     self.initial_boxes.add(pos)
@@ -186,6 +186,19 @@ class SokobanTwoPlayerEnv:
                 next_a2 = self.agent2_pos
                 push_from1, push_to1 = None, None
                 push_from2, push_to2 = None, None
+
+        # trường hợp 4: một agent đẩy hộp vào ô agent kia bước tới
+        if push_to1 is not None and push_to1 == next_a2:
+            next_a1 = self.agent1_pos
+            next_a2 = self.agent2_pos
+            push_from1, push_to1 = None, None
+            push_from2, push_to2 = None, None
+
+        if push_to2 is not None and push_to2 == next_a1:
+            next_a1 = self.agent1_pos
+            next_a2 = self.agent2_pos
+            push_from1, push_to1 = None, None
+            push_from2, push_to2 = None, None
 
         # áp dụng nước đi cho agent 1
         self.agent1_pos = next_a1

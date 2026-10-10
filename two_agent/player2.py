@@ -1,15 +1,15 @@
-# Thuật toán Greedy Best-First Search (GBFS) tìm đường đẩy hộp cho Agent 2
-# Yêu cầu 8: File mã nguồn độc lập, sử dụng thuật toán GBFS (f = h)
-# kết hợp Heuristic Maze Distance và kiểm tra Deadlock.
+# thuat toan gbfs cho agent 2
 import time
 import heapq
 from collections import deque
+
+NAME = "GBFS"
 
 _maze_dist_cache = {}
 _deadlock_cache = {}
 
 def _precompute_maze_distances(walls, targets, width, height):
-    """Tính khoảng cách đường đi thực tế (Maze Distance) tránh tường từ các ô đích."""
+    # tinh khoang cach me cung tu cac o dich bang bfs
     key = (frozenset(walls), frozenset(targets), width, height)
     if key in _maze_dist_cache:
         return _maze_dist_cache[key]
@@ -33,13 +33,12 @@ def _precompute_maze_distances(walls, targets, width, height):
 
 
 def _compute_deadlocks(walls, targets, width, height):
-    """Tính các ô deadlock (góc kẹt, hành lang cụt) mà hộp không thể nào đẩy tới đích."""
+    # xac dinh cac o deadlock khong the day den dich
     key = (frozenset(walls), frozenset(targets), width, height)
     if key in _deadlock_cache:
         return _deadlock_cache[key]
 
     dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    # Reverse-push BFS: từ đích tìm tất cả ô mà hộp có thể được đẩy tới đích
     reachable = set(targets)
     queue = deque(list(targets))
 
@@ -79,10 +78,7 @@ class Player2:
         ]
 
     def _plan_gbfs(self, agent_pos, box_pos, target, other_boxes, enemy_pos, walls, width, height, maze_dist, deadlocks, timeout_time):
-        """Thuật toán Greedy Best-First Search (GBFS) tìm chuỗi hành động đẩy hộp.
-        Hàm đánh giá: f(n) = h(n)
-        Ưu tiên duyệt theo giá trị heuristic h(n) nhỏ nhất trước (khoảng cách hộp tới đích).
-        Tie-break bằng g(n) (số bước đã đi)."""
+        # tim duong bang gbfs
         start_state = (box_pos, agent_pos)
         h0 = maze_dist.get(target, {}).get(box_pos, 999)
         # Hàng đợi: (h, g, counter, state, actions)
@@ -130,12 +126,13 @@ class Player2:
         return None
 
     def get_action(self, state):
-        """Chọn hành động bằng GBFS trong thời gian < 1000ms."""
+        # chon nuoc di bang gbfs
         start_time = time.time()
-        timeout_time = start_time + 0.90 # Giới hạn 900ms
+        timeout_time = start_time + 0.90 # gioi han 900ms
 
         my_pos = state['agent2'] if self.agent_id == 2 else state['agent1']
         enemy_pos = state['agent1'] if self.agent_id == 2 else state['agent2']
+
         enemy_id = 1 if self.agent_id == 2 else 2
 
         boxes = set(state['boxes'])
@@ -204,6 +201,16 @@ class Player2:
         return 'Wait'
 
 
-def get_action(agent_id, game_state):
+def get_action(*args, **kwargs):
+    if len(args) == 1:
+        game_state = args[0]
+        agent_id = 2
+    elif len(args) >= 2:
+        agent_id = args[0]
+        game_state = args[1]
+    else:
+        game_state = kwargs.get('game_state', kwargs.get('state'))
+        agent_id = kwargs.get('agent_id', 2)
+
     agent = Player2(agent_id)
     return agent.get_action(game_state)

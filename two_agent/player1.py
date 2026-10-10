@@ -1,15 +1,15 @@
-# Thuật toán A* tìm đường đẩy hộp cho Agent 1
-# Yêu cầu 7 & 8: Sử dụng thuật toán A* (f = g + h) với Heuristic Maze Distance
-# và phát hiện Deadlock để tránh đưa hộp vào góc kẹt/ngõ cụt.
+# thuat toan a* cho agent 1
 import time
 import heapq
 from collections import deque
+
+NAME = "A*"
 
 _maze_dist_cache = {}
 _deadlock_cache = {}
 
 def _precompute_maze_distances(walls, targets, width, height):
-    """Tính khoảng cách đường đi thực tế (Maze Distance) tránh tường từ các ô đích."""
+    # tinh khoang cach me cung tu cac o dich bang bfs
     key = (frozenset(walls), frozenset(targets), width, height)
     if key in _maze_dist_cache:
         return _maze_dist_cache[key]
@@ -33,13 +33,12 @@ def _precompute_maze_distances(walls, targets, width, height):
 
 
 def _compute_deadlocks(walls, targets, width, height):
-    """Tính các ô deadlock (góc kẹt, hành lang cụt) mà hộp không thể nào đẩy tới đích."""
+    # xac dinh cac o deadlock khong the day den dich
     key = (frozenset(walls), frozenset(targets), width, height)
     if key in _deadlock_cache:
         return _deadlock_cache[key]
 
     dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    # Reverse-push BFS: từ đích tìm tất cả ô mà hộp có thể được đẩy tới đích
     reachable = set(targets)
     queue = deque(list(targets))
 
@@ -79,10 +78,7 @@ class Player1:
         ]
 
     def _plan_astar(self, agent_pos, box_pos, target, other_boxes, enemy_pos, walls, width, height, maze_dist, deadlocks, timeout_time):
-        """Thuật toán A* tìm chuỗi hành động tối ưu đưa box_pos vào target.
-        Hàm đánh giá: f(n) = g(n) + h(n)
-        g: số bước agent đã đi
-        h: maze distance từ vị trí hộp đến target (admissible & consistent)"""
+        # tim duong a* dua hop ve dich
         start_state = (box_pos, agent_pos)
         h0 = maze_dist.get(target, {}).get(box_pos, 999)
         frontier = [(h0, 0, 0, start_state, [])]
@@ -135,9 +131,9 @@ class Player1:
         return None
 
     def get_action(self, state):
-        """Chọn hành động bằng A* trong thời gian < 1000ms."""
+        # chon nuoc di bang a*
         start_time = time.time()
-        timeout_time = start_time + 0.90 # Giới hạn 900ms
+        timeout_time = start_time + 0.90 # gioi han 900ms
 
         my_pos = state['agent1'] if self.agent_id == 1 else state['agent2']
         enemy_pos = state['agent2'] if self.agent_id == 1 else state['agent1']
@@ -211,6 +207,16 @@ class Player1:
         return 'Wait'
 
 
-def get_action(agent_id, game_state):
+def get_action(*args, **kwargs):
+    if len(args) == 1:
+        game_state = args[0]
+        agent_id = 1
+    elif len(args) >= 2:
+        agent_id = args[0]
+        game_state = args[1]
+    else:
+        game_state = kwargs.get('game_state', kwargs.get('state'))
+        agent_id = kwargs.get('agent_id', 1)
+
     agent = Player1(agent_id)
     return agent.get_action(game_state)

@@ -11,6 +11,7 @@ class SokobanSolver:
         # tiền xử lý khoảng cách mê cung từ mỗi ô đến các ô đích bằng bfs
         # không dùng manhattan hay euclidean
         self.maze_dist = self._precompute_maze_distances()
+        self.deadlocks = self._precompute_deadlocks()
 
     def _precompute_maze_distances(self):
         # tính khoảng cách ngắn nhất trên bản đồ vượt tường
@@ -30,6 +31,34 @@ class SokobanSolver:
                         visited.add((nr, nc))
                         queue.append(((nr, nc), d + 1))
         return dist_map
+
+    def _precompute_deadlocks(self):
+        # xác định các vị trí deadlock (hộp không thể di chuyển đến đích)
+        dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        reachable = set(self.targets)
+        queue = deque(list(self.targets))
+
+        while queue:
+            r, c = queue.popleft()
+            for dr, dc in dirs:
+                prev = (r - dr, c - dc)
+                behind = (r - 2 * dr, c - 2 * dc)
+                if not (0 <= prev[0] < self.env.height and 0 <= prev[1] < self.env.width):
+                    continue
+                if not (0 <= behind[0] < self.env.height and 0 <= behind[1] < self.env.width):
+                    continue
+                if prev in self.walls or prev in reachable or behind in self.walls:
+                    continue
+                reachable.add(prev)
+                queue.append(prev)
+
+        deadlocks = set()
+        for r in range(self.env.height):
+            for c in range(self.env.width):
+                pos = (r, c)
+                if pos not in self.walls and pos not in reachable:
+                    deadlocks.add(pos)
+        return deadlocks
 
     def heuristic(self, boxes):
         # tổng khoảng cách mê cung ngắn nhất từ mỗi hộp đến một đích bất kỳ
@@ -68,6 +97,9 @@ class SokobanSolver:
                 # trường hợp đẩy hộp
                 bnr, bnc = nr + dr, nc + dc
                 if (bnr, bnc) in self.walls or (bnr, bnc) in boxes_set:
+                    continue
+                # không đẩy hộp vào góc kẹt deadlock nếu ô đó không phải đích
+                if (bnr, bnc) in self.deadlocks and (bnr, bnc) not in self.targets:
                     continue
                 # tạo tập hợp mới
                 new_boxes = list(boxes_set)
@@ -193,3 +225,55 @@ class SokobanSolver:
             'expanded': expanded_nodes,
             'generated': generated_nodes
         }
+
+if __name__ == '__main__':
+    import os
+    import sys
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
+    # thêm thư mục cha vào sys.path để import game_env
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from single_agent.game_env import SokobanEnv
+
+    map_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join('maps', 'example_map.txt')
+    if not os.path.exists(map_path):
+        print(f"Loi: Khong tim thay file ban do tai '{map_path}'")
+        sys.exit(1)
+
+    print("=" * 60)
+    print(f"CHAY THU THUAT TOAN SOKOBAN TREN BAN DO: {map_path}")
+    print("=" * 60)
+
+    env = SokobanEnv(map_path)
+    solver = SokobanSolver(env)
+
+    # 1. Chay thuat toan A*
+    print("\n--- 1. THUAT TOAN A* (HEURISTIC MAZE DISTANCE) ---")
+    res_astar = solver.solve_astar()
+    if res_astar['success']:
+        print("Trang thai: Thanh cong!")
+        print(f"Tong chi phi (buoc di): {res_astar['cost']}")
+        print(f"Thoi gian thuc thi: {res_astar['time_ms']:.2f} ms")
+        print(f"So node da mo (expanded): {res_astar['expanded']}")
+        print(f"So node da tao (generated): {res_astar['generated']}")
+        print(f"Danh sach hanh dong ({len(res_astar['actions'])} buoc):")
+        print(res_astar['actions'])
+    else:
+        print("Khong tim thay loi giai!")
+
+    # 2. Chay thuat toan UCS
+    print("\n--- 2. THUAT TOAN UNIFORM-COST SEARCH (UCS) ---")
+    res_ucs = solver.solve_ucs()
+    if res_ucs['success']:
+        print("Trang thai: Thanh cong!")
+        print(f"Tong chi phi (buoc di): {res_ucs['cost']}")
+        print(f"Thoi gian thuc thi: {res_ucs['time_ms']:.2f} ms")
+        print(f"So node da mo (expanded): {res_ucs['expanded']}")
+        print(f"So node da tao (generated): {res_ucs['generated']}")
+        print(f"Danh sach hanh dong ({len(res_ucs['actions'])} buoc):")
+        print(res_ucs['actions'])
+    else:
+        print("Khong tim thay loi giai!")
+    print("=" * 60)
+

@@ -7,18 +7,49 @@ import pygame
 # thêm thư mục hiện tại vào đường dẫn
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import importlib
+import importlib.util
 from two_agent.game_env_2p import SokobanTwoPlayerEnv
-import two_agent.player1 as player1
-import two_agent.player2 as player2
+
+def load_agent_module(identifier):
+    # nếu đã là module
+    if hasattr(identifier, 'get_action') or hasattr(identifier, '__file__'):
+        return identifier
+
+    # trường hợp truyền đường dẫn file .py
+    if identifier.endswith('.py') or os.path.sep in identifier or '/' in identifier or os.path.exists(identifier):
+        file_path = os.path.abspath(identifier)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Khong tim thay file agent tai: {identifier}")
+        mod_name = os.path.splitext(os.path.basename(file_path))[0]
+        # thêm thư mục chứa file vào sys.path để module import file phụ nếu có
+        file_dir = os.path.dirname(file_path)
+        if file_dir not in sys.path:
+            sys.path.insert(0, file_dir)
+        spec = importlib.util.spec_from_file_location(mod_name, file_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    # trường hợp truyền tên module theo chuẩn python
+    return importlib.import_module(identifier)
 
 class SokobanTwoPlayerGUI:
-    def __init__(self, map_path='maps/map_competitive.txt', max_steps=60):
+    def __init__(self, map_path='maps/map_competitive.txt', max_steps=60, player1_mod='two_agent.player1', player2_mod='two_agent.player2'):
         pygame.init()
         pygame.display.set_caption("Sokoban Competitive 2-Agent - AI Midterm")
 
         self.map_path = map_path
         self.max_steps = max_steps
         self.env = SokobanTwoPlayerEnv(map_path, max_steps=max_steps)
+
+        # nạp thuật toán cho 2 agent từ file hoặc module riêng biệt
+        self.p1_module_name = str(player1_mod)
+        self.p2_module_name = str(player2_mod)
+        self.p1 = load_agent_module(player1_mod)
+        self.p2 = load_agent_module(player2_mod)
+        self.name1 = getattr(self.p1, 'NAME', 'Agent 1')
+        self.name2 = getattr(self.p2, 'NAME', 'Agent 2')
 
         # kích thước lưới và cửa sổ
         self.tile_size = 48
@@ -70,6 +101,24 @@ class SokobanTwoPlayerGUI:
         self.last_act1 = 'None'
         self.last_act2 = 'None'
 
+    def _call_agent(self, mod, agent_id, state):
+        # hỗ trợ các giao thức gọi khác nhau từ các nhóm sinh viên
+        if hasattr(mod, 'get_action'):
+            try:
+                return mod.get_action(agent_id, state)
+            except TypeError:
+                return mod.get_action(state)
+        elif hasattr(mod, f'Player{agent_id}'):
+            cls = getattr(mod, f'Player{agent_id}')
+            return cls(agent_id).get_action(state)
+        elif hasattr(mod, 'Player'):
+            cls = getattr(mod, 'Player')
+            try:
+                return cls(agent_id).get_action(state)
+            except TypeError:
+                return cls().get_action(state)
+        return 'Wait'
+
     def step_game(self):
         # gọi thuật toán của 2 agent để tính nước đi đồng thời
         if self.env.is_game_over():
@@ -79,13 +128,13 @@ class SokobanTwoPlayerGUI:
 
         # tính toán thời gian của agent 1
         t1_start = time.time()
-        act1 = player1.get_action(1, state)
+        act1 = self._call_agent(self.p1, 1, state)
         self.time_agent1 = round((time.time() - t1_start) * 1000, 2)
         self.last_act1 = act1
 
         # tính toán thời gian của agent 2
         t2_start = time.time()
-        act2 = player2.get_action(2, state)
+        act2 = self._call_agent(self.p2, 2, state)
         self.time_agent2 = round((time.time() - t2_start) * 1000, 2)
         self.last_act2 = act2
 
@@ -188,11 +237,11 @@ class SokobanTwoPlayerGUI:
 
         # tỷ số
         s1, s2 = self.env.get_scores()
-        txt_s1 = self.font_medium.render(f"Agent 1 (Xanh): {s1} hop", True, self.color_agent1)
+        txt_s1 = self.font_medium.render(f"Agent 1 ({self.name1}): {s1} hop", True, self.color_agent1)
         self.screen.blit(txt_s1, (sb_x + 15, cur_y))
         cur_y += line_spacing
 
-        txt_s2 = self.font_medium.render(f"Agent 2 (Do):   {s2} hop", True, self.color_agent2)
+        txt_s2 = self.font_medium.render(f"Agent 2 ({self.name2}): {s2} hop", True, self.color_agent2)
         self.screen.blit(txt_s2, (sb_x + 15, cur_y))
         cur_y += 28
 
@@ -200,10 +249,10 @@ class SokobanTwoPlayerGUI:
         if self.env.is_game_over():
             winner = self.env.get_winner()
             if winner == 1:
-                res_txt = "Ket qua: Agent 1 Thang!"
+                res_txt = f"Ket qua: Agent 1 ({self.name1}) Thang!"
                 res_col = self.color_agent1
             elif winner == 2:
-                res_txt = "Ket qua: Agent 2 Thang!"
+                res_txt = f"Ket qua: Agent 2 ({self.name2}) Thang!"
                 res_col = self.color_agent2
             else:
                 res_txt = "Ket qua: Hoa nhau!"
@@ -280,10 +329,10 @@ class SokobanTwoPlayerGUI:
 
         # Người chiến thắng
         if winner == 1:
-            winner_text = "AGENT 1 (A*) CHIEN THANG!"
+            winner_text = f"AGENT 1 ({self.name1}) CHIEN THANG!"
             winner_color = (65, 175, 245)
         elif winner == 2:
-            winner_text = "AGENT 2 (GBFS) CHIEN THANG!"
+            winner_text = f"AGENT 2 ({self.name2}) CHIEN THANG!"
             winner_color = (245, 95, 85)
         else:
             winner_text = "KET QUA: HOA NHAU!"
@@ -355,23 +404,42 @@ class SokobanTwoPlayerGUI:
         pygame.quit()
 
 if __name__ == '__main__':
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+
     map_file = os.path.join('maps', 'map_competitive.txt')
     steps = 60
+    p1_mod = 'two_agent.player1'
+    p2_mod = 'two_agent.player2'
 
-    # nhận tham số số bước n từ dòng lệnh nếu có
-    if len(sys.argv) > 1:
+    # nhận tham số dòng lệnh: bản đồ (.txt), số bước n (số nguyên), module hoặc đường dẫn file .py của 2 agent
+    custom_mods = []
+    has_cli_steps = False
+    for arg in sys.argv[1:]:
+        if arg.isdigit():
+            steps = int(arg)
+            has_cli_steps = True
+        elif arg.endswith('.txt'):
+            map_file = arg
+        else:
+            custom_mods.append(arg)
+
+    if len(custom_mods) >= 1:
+        p1_mod = custom_mods[0]
+    if len(custom_mods) >= 2:
+        p2_mod = custom_mods[1]
+
+    # yêu cầu 6: số bước n được nhập bởi người dùng (nếu không truyền qua dòng lệnh)
+    if not has_cli_steps and sys.stdin.isatty():
         try:
-            steps = int(sys.argv[1])
-        except ValueError:
-            map_file = sys.argv[1]
-    if len(sys.argv) > 2:
-        try:
-            steps = int(sys.argv[2])
-        except ValueError:
+            user_input = input("Nhap so buoc thi dau n (nhan Enter de mac dinh 60): ").strip()
+            if user_input.isdigit():
+                steps = int(user_input)
+        except (EOFError, KeyboardInterrupt):
             pass
 
     try:
-        gui = SokobanTwoPlayerGUI(map_path=map_file, max_steps=steps)
+        gui = SokobanTwoPlayerGUI(map_path=map_file, max_steps=steps, player1_mod=p1_mod, player2_mod=p2_mod)
         gui.run()
     except KeyboardInterrupt:
         pygame.quit()

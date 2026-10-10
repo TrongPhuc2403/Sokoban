@@ -10,7 +10,7 @@ from single_agent.game_env import SokobanEnv
 from single_agent.solver import SokobanSolver
 
 class SokobanGUI:
-    def __init__(self, map_path='maps/map_medium.txt'):
+    def __init__(self, map_path='maps/example_map.txt'):
         pygame.init()
         pygame.display.set_caption("Sokoban Single Agent - AI Midterm")
 
@@ -197,6 +197,11 @@ class SokobanGUI:
         self.screen.blit(txt_total, (sb_x + 15, cur_y))
         cur_y += line_spacing
 
+        last_action_str = self.solution_actions[self.solution_index - 1] if self.solution_index > 0 else "None"
+        txt_cur_act = self.font_medium.render(f"Action vua di: {last_action_str}", True, self.color_accent)
+        self.screen.blit(txt_cur_act, (sb_x + 15, cur_y))
+        cur_y += line_spacing
+
         # thuật toán đang chọn
         txt_algo = self.font_medium.render(f"Thuat toan: {self.current_algo}", True, self.color_accent)
         self.screen.blit(txt_algo, (sb_x + 15, cur_y))
@@ -344,7 +349,7 @@ class SokobanGUI:
 
 if __name__ == '__main__':
     # đường dẫn bản đồ mặc định
-    map_file = os.path.join('maps', 'map_medium.txt')
+    map_file = os.path.join('maps', 'example_map.txt')
     if len(sys.argv) > 1:
         map_file = sys.argv[1]
     try:
