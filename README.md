@@ -41,8 +41,9 @@ python test_all.py
 ```bash
 python single_agent/main_gui.py maps/map_medium.txt
 ```
-- Phím 1: Chạy thuật toán UCS
-- Phím 2: Chạy thuật toán A*
+- Phím 1 hoặc bấm nút UCS: Chạy thuật toán UCS
+- Phím 2 hoặc bấm nút A*: Chạy thuật toán A*
+- Thanh bên hiển thị số action, tổng chi phí, chuỗi action (N/E/S/W) và thông số thuật toán
 - Space: Tự động chạy / Tạm dừng
 - Phím mũi tên Phải (->): Tiến 1 bước
 - Phím mũi tên Trái (<-): Lùi 1 bước (Undo)

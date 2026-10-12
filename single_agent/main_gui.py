@@ -17,6 +17,7 @@ class SokobanGUI:
         self.map_path = map_path
         self.env = SokobanEnv(map_path)
         self.solver = SokobanSolver(self.env)
+        self.inside = self._find_inside_cells()
 
         # kích thước mỗi ô trên lưới
         self.tile_size = 56
@@ -24,8 +25,8 @@ class SokobanGUI:
         self.grid_width = self.env.width * self.tile_size
         self.grid_height = self.env.height * self.tile_size
 
-        self.screen_width = max(600, self.grid_width + self.sidebar_width)
-        self.screen_height = max(450, self.grid_height + 40)
+        self.screen_width = max(600, self.grid_width + self.sidebar_width + 20)
+        self.screen_height = max(640, self.grid_height + 40)
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.clock = pygame.time.Clock()
 
@@ -70,6 +71,50 @@ class SokobanGUI:
             'cost': 0,
             'status': 'chua chay'
         }
+
+        # nút bấm chọn thuật toán bằng chuột
+        sb_x = self.screen_width - self.sidebar_width + 25
+        self.btn_ucs = pygame.Rect(sb_x, 58, 110, 34)
+        self.btn_astar = pygame.Rect(sb_x + 120, 58, 110, 34)
+
+    def draw_button(self, rect, label, active):
+        # vẽ 1 nút, nút đang chọn được tô sáng, nút đang rê chuột được làm nổi
+        hover = rect.collidepoint(pygame.mouse.get_pos())
+        if active:
+            bg = self.color_accent
+            fg = (30, 32, 40)
+        else:
+            bg = (80, 86, 104) if hover else (60, 65, 80)
+            fg = self.color_text
+        pygame.draw.rect(self.screen, bg, rect, border_radius=8)
+        txt = self.font_medium.render(label, True, fg)
+        self.screen.blit(txt, (rect.centerx - txt.get_width() // 2, rect.centery - txt.get_height() // 2))
+
+    def show_solving(self, algo_name):
+        # hiện thông báo đang giải trước khi chạy thuật toán (tránh cảm giác bị treo)
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        overlay.fill((12, 15, 22, 170))
+        self.screen.blit(overlay, (0, 0))
+        txt = self.font_large.render(f"Dang giai bang {algo_name}...", True, self.color_accent)
+        self.screen.blit(txt, ((self.screen_width - txt.get_width()) // 2, (self.screen_height - txt.get_height()) // 2))
+        pygame.display.flip()
+
+    def _find_inside_cells(self):
+        # loang từ vị trí agent để biết ô nào nằm trong tường (ô ngoài bản đồ không vẽ sàn)
+        start = self.env.initial_agent
+        inside = {start}
+        stack = [start]
+        while stack:
+            r, c = stack.pop()
+            for dr, dc in self.env.directions.values():
+                nxt = (r + dr, c + dc)
+                if nxt in inside or nxt in self.env.walls:
+                    continue
+                if not (0 <= nxt[0] < self.env.height and 0 <= nxt[1] < self.env.width):
+                    continue
+                inside.add(nxt)
+                stack.append(nxt)
+        return inside
 
     def run_algorithm(self, algo_name):
         # chạy thuật toán được chọn và lưu danh sách nước đi
@@ -130,7 +175,7 @@ class SokobanGUI:
                     # vẽ ô tường
                     pygame.draw.rect(self.screen, self.color_wall, rect, border_radius=4)
                     pygame.draw.rect(self.screen, (90, 95, 115), rect, width=2, border_radius=4)
-                else:
+                elif pos in self.inside or pos in self.env.targets or pos in self.env.boxes:
                     # vẽ ô sàn
                     pygame.draw.rect(self.screen, self.color_floor, rect)
                     pygame.draw.rect(self.screen, self.color_grid_line, rect, width=1)
@@ -179,22 +224,26 @@ class SokobanGUI:
         pygame.draw.rect(self.screen, self.color_sidebar, panel_rect, border_radius=8)
         pygame.draw.rect(self.screen, (60, 65, 80), panel_rect, width=2, border_radius=8)
 
-        cur_y = sb_y + 15
-        line_spacing = 24
+        cur_y = sb_y + 10
+        line_spacing = 22
 
         # tiêu đề
         title = self.font_large.render("SOKOBAN 1P", True, self.color_accent)
         self.screen.blit(title, (sb_x + 15, cur_y))
-        cur_y += 35
+
+        # nút chọn thuật toán
+        self.draw_button(self.btn_ucs, "UCS  [1]", self.current_algo == 'UCS')
+        self.draw_button(self.btn_astar, "A*  [2]", self.current_algo == 'A*')
+        cur_y = self.btn_ucs.bottom + 12
 
         # số bước hiện tại / tổng số bước
-        txt_actions = self.font_medium.render(f"So buoc da di: {self.solution_index}", True, self.color_text)
+        total_act = len(self.solution_actions)
+        txt_actions = self.font_medium.render(f"So action: {self.solution_index} / {total_act}", True, self.color_text)
         self.screen.blit(txt_actions, (sb_x + 15, cur_y))
         cur_y += line_spacing
 
-        total_act = len(self.solution_actions)
-        txt_total = self.font_medium.render(f"Tong so action: {total_act}", True, self.color_text)
-        self.screen.blit(txt_total, (sb_x + 15, cur_y))
+        txt_cost = self.font_medium.render(f"Tong chi phi (cost): {self.algo_stats['cost']}", True, self.color_text)
+        self.screen.blit(txt_cost, (sb_x + 15, cur_y))
         cur_y += line_spacing
 
         last_action_str = self.solution_actions[self.solution_index - 1] if self.solution_index > 0 else "None"
@@ -202,16 +251,11 @@ class SokobanGUI:
         self.screen.blit(txt_cur_act, (sb_x + 15, cur_y))
         cur_y += line_spacing
 
-        # thuật toán đang chọn
-        txt_algo = self.font_medium.render(f"Thuat toan: {self.current_algo}", True, self.color_accent)
-        self.screen.blit(txt_algo, (sb_x + 15, cur_y))
-        cur_y += line_spacing
-
         # trạng thái phát
         play_status = "Tam dung" if self.is_paused else "Dang chay"
         txt_status = self.font_medium.render(f"Trang thai: {play_status}", True, (100, 220, 255) if not self.is_paused else (255, 180, 100))
         self.screen.blit(txt_status, (sb_x + 15, cur_y))
-        cur_y += 30
+        cur_y += 28
 
         # thông số thực thi
         stat_head = self.font_large.render("Thong so:", True, self.color_text)
@@ -223,16 +267,33 @@ class SokobanGUI:
         self.screen.blit(self.font_small.render(f"Thoi gian: {self.algo_stats['time_ms']} ms", True, self.color_text_muted), (sb_x + 15, cur_y))
         cur_y += 18
         self.screen.blit(self.font_small.render(f"Node da mo: {self.algo_stats['expanded']}", True, self.color_text_muted), (sb_x + 15, cur_y))
-        cur_y += 30
+        cur_y += 26
+
+        # chuỗi hành động (N/E/S/W), action đã đi được tô sáng
+        self.screen.blit(self.font_medium.render("Chuoi action (N/E/S/W):", True, self.color_accent), (sb_x + 15, cur_y))
+        cur_y += 22
+        per_line = 18
+        max_lines = 4
+        char_w = 12
+        for i, act in enumerate(self.solution_actions[:per_line * max_lines]):
+            col = self.color_text if i < self.solution_index else self.color_text_muted
+            if i == self.solution_index - 1:
+                col = self.color_accent
+            ch = self.font_small.render(act[0], True, col)
+            self.screen.blit(ch, (sb_x + 15 + (i % per_line) * char_w, cur_y + (i // per_line) * 16))
+        if len(self.solution_actions) > per_line * max_lines:
+            more = self.font_small.render("...", True, self.color_text_muted)
+            self.screen.blit(more, (sb_x + 15, cur_y + max_lines * 16))
+        cur_y += max_lines * 16 + 22
 
         # hướng dẫn phím bấm
         guide_head = self.font_medium.render("Huong dan phim:", True, self.color_accent)
         self.screen.blit(guide_head, (sb_x + 15, cur_y))
-        cur_y += 24
+        cur_y += 22
 
         keys_info = [
-            ("Phim 1", "Chay UCS"),
-            ("Phim 2", "Chay A*"),
+            ("Phim 1 / nut UCS", "Chay UCS"),
+            ("Phim 2 / nut A*", "Chay A*"),
             ("Space", "Tam dung / Chay tiep"),
             ("Mui ten ->", "Tien 1 buoc"),
             ("Mui ten <-", "Lui 1 buoc (undo)"),
@@ -241,7 +302,7 @@ class SokobanGUI:
         for key_str, desc_str in keys_info:
             txt_k = self.font_small.render(f"- {key_str}: {desc_str}", True, self.color_text_muted)
             self.screen.blit(txt_k, (sb_x + 15, cur_y))
-            cur_y += 20
+            cur_y += 18
 
     def draw_solved_modal(self):
         if not self.env.is_solved():
@@ -298,6 +359,14 @@ class SokobanGUI:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # bấm chuột vào nút chọn thuật toán
+                    if self.btn_ucs.collidepoint(event.pos):
+                        self.show_solving('UCS')
+                        self.run_algorithm('UCS')
+                    elif self.btn_astar.collidepoint(event.pos):
+                        self.show_solving('A*')
+                        self.run_algorithm('A*')
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         # phím space tạm dừng hoặc chạy tiếp
@@ -315,9 +384,11 @@ class SokobanGUI:
                         self.step_backward()
                     elif event.key == pygame.K_1:
                         # chọn ucs
+                        self.show_solving('UCS')
                         self.run_algorithm('UCS')
                     elif event.key == pygame.K_2:
                         # chọn a*
+                        self.show_solving('A*')
                         self.run_algorithm('A*')
                     elif event.key == pygame.K_r:
                         # đặt lại ban đầu

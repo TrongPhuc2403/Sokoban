@@ -61,7 +61,7 @@ class SokobanTwoPlayerGUI:
         self.grid_width = self.env.width * self.tile_size
         self.grid_height = self.env.height * self.tile_size
 
-        self.screen_width = max(720, self.grid_width + self.sidebar_width)
+        self.screen_width = max(720, self.grid_width + self.sidebar_width + 20)
         self.screen_height = max(520, self.grid_height + 40)
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         self.clock = pygame.time.Clock()
@@ -99,7 +99,8 @@ class SokobanTwoPlayerGUI:
         self.step_delay = 400
         self.last_step_time = 0
 
-        # thời gian suy nghĩ của từng agent (ms)
+        # thời gian suy nghĩ của từng agent (ms), giới hạn 1000 ms mỗi bước (yêu cầu 7)
+        self.time_limit_ms = 1000
         self.time_agent1 = 0
         self.time_agent2 = 0
         self.last_act1 = 'None'
@@ -123,24 +124,29 @@ class SokobanTwoPlayerGUI:
                 return cls().get_action(state)
         return 'Wait'
 
+    def _decide(self, mod, agent_id, state):
+        # gọi agent, đo thời gian; quá 1000 ms hoặc nước đi không hợp lệ thì coi như đứng yên
+        t_start = time.perf_counter()
+        try:
+            act = self._call_agent(mod, agent_id, state)
+        except Exception as e:
+            print(f"Agent {agent_id} loi: {e}")
+            act = 'Wait'
+        dur = round((time.perf_counter() - t_start) * 1000, 2)
+        if act not in self.env.directions:
+            act = 'Wait'
+        if dur > self.time_limit_ms:
+            return 'Wait', dur, f"Wait - qua {self.time_limit_ms}ms"
+        return act, dur, act
+
     def step_game(self):
         # gọi thuật toán của 2 agent để tính nước đi đồng thời
         if self.env.is_game_over():
             return
 
-        state = self.env.get_state()
-
-        # tính toán thời gian của agent 1
-        t1_start = time.time()
-        act1 = self._call_agent(self.p1, 1, state)
-        self.time_agent1 = round((time.time() - t1_start) * 1000, 2)
-        self.last_act1 = act1
-
-        # tính toán thời gian của agent 2
-        t2_start = time.time()
-        act2 = self._call_agent(self.p2, 2, state)
-        self.time_agent2 = round((time.time() - t2_start) * 1000, 2)
-        self.last_act2 = act2
+        # cả hai agent nhận cùng một trạng thái (mỗi bên một bản sao riêng) trước khi hành động
+        act1, self.time_agent1, self.last_act1 = self._decide(self.p1, 1, self.env.get_state())
+        act2, self.time_agent2, self.last_act2 = self._decide(self.p2, 2, self.env.get_state())
 
         # thực hiện bước đi đồng thời
         self.env.step(act1, act2)
