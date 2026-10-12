@@ -348,10 +348,14 @@ class SokobanGUI:
         pygame.quit()
 
 if __name__ == '__main__':
-    # đường dẫn bản đồ mặc định
-    map_file = os.path.join('maps', 'example_map.txt')
+    # đường dẫn bản đồ mặc định tính theo thư mục gốc dự án
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    map_file = os.path.join(root_dir, 'maps', 'example_map.txt')
     if len(sys.argv) > 1:
         map_file = sys.argv[1]
+    if not os.path.exists(map_file):
+        print(f"Khong tim thay file ban do: {map_file}")
+        sys.exit(1)
     try:
         gui = SokobanGUI(map_file)
         gui.run()

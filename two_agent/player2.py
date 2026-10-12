@@ -1,12 +1,23 @@
 # thuat toan gbfs cho agent 2
 import time
 import heapq
+import random
 from collections import deque
 
 NAME = "GBFS"
 
 _maze_dist_cache = {}
 _deadlock_cache = {}
+# nho trang thai luot truoc de phat hien hai agent ket nhau (livelock)
+_last_seen = {}
+
+
+def _update_stuck(agent_id, key):
+    # tra ve so luot lien tiep trang thai khong doi
+    prev_key, count = _last_seen.get(agent_id, (None, 0))
+    count = count + 1 if prev_key == key else 0
+    _last_seen[agent_id] = (key, count)
+    return count
 
 def _precompute_maze_distances(walls, targets, width, height):
     # tinh khoang cach me cung tu cac o dich bang bfs
@@ -77,10 +88,13 @@ class Player2:
             ('East', 0, 1)
         ]
 
-    def _plan_gbfs(self, agent_pos, box_pos, target, other_boxes, enemy_pos, walls, width, height, maze_dist, deadlocks, timeout_time):
+    def _plan_gbfs(self, agent_pos, box_pos, target, other_boxes, enemy_block, walls, width, height, maze_dist, deadlocks, timeout_time):
         # tim duong bang gbfs
-        start_state = (box_pos, agent_pos)
-        h0 = maze_dist.get(target, {}).get(box_pos, 999)
+        # neu hop dang nam san tren dich (cuop hop doi thu) thi hop phai roi
+        # khoi dich it nhat mot lan roi moi duoc tinh la dat lai
+        start_left = box_pos != target
+        start_state = (box_pos, agent_pos, start_left)
+        h0 = maze_dist.get(target, {}).get(box_pos, 999) if start_left else 2
         # Hàng đợi: (h, g, counter, state, actions)
         frontier = [(h0, 0, 0, start_state, [])]
         visited = {start_state}
@@ -90,38 +104,35 @@ class Player2:
             if time.time() > timeout_time:
                 break
 
-            h_val, g, _, (b_curr, a_curr), actions = heapq.heappop(frontier)
+            h_val, g, _, cur_state, actions = heapq.heappop(frontier)
+            b_curr, a_curr, left = cur_state
 
-            if b_curr == target:
+            if b_curr == target and left:
                 return actions
 
             for act, dr, dc in self.moves:
                 na = (a_curr[0] + dr, a_curr[1] + dc)
-                if na in walls or na in other_boxes or na == enemy_pos:
+                if na in walls or na in other_boxes or na in enemy_block:
+                    continue
+                if not (0 <= na[0] < height and 0 <= na[1] < width):
                     continue
 
+                nb = b_curr
                 if na == b_curr:
                     # Đẩy hộp
                     nb = (b_curr[0] + dr, b_curr[1] + dc)
-                    if nb in walls or nb in other_boxes or nb == enemy_pos:
+                    if nb in walls or nb in other_boxes or nb in enemy_block:
                         continue
                     if nb in deadlocks and nb != target:
                         continue
 
-                    nxt_state = (nb, na)
-                    if nxt_state not in visited:
-                        visited.add(nxt_state)
-                        nh = maze_dist.get(target, {}).get(nb, 999)
-                        counter += 1
-                        heapq.heappush(frontier, (nh, g + 1, counter, nxt_state, actions + [act]))
-                else:
-                    # Di chuyển agent
-                    nxt_state = (b_curr, na)
-                    if nxt_state not in visited:
-                        visited.add(nxt_state)
-                        nh = maze_dist.get(target, {}).get(b_curr, 999)
-                        counter += 1
-                        heapq.heappush(frontier, (nh, g + 1, counter, nxt_state, actions + [act]))
+                n_left = left or nb != target
+                nxt_state = (nb, na, n_left)
+                if nxt_state not in visited:
+                    visited.add(nxt_state)
+                    nh = maze_dist.get(target, {}).get(nb, 999) if n_left else 2
+                    counter += 1
+                    heapq.heappush(frontier, (nh, g + 1, counter, nxt_state, actions + [act]))
 
         return None
 
@@ -144,6 +155,21 @@ class Player2:
 
         maze_dist = _precompute_maze_distances(walls, targets, width, height)
         deadlocks = _compute_deadlocks(walls, targets, width, height)
+
+        # phat hien ket: neu trang thai khong doi qua nhieu luot thi ne doi thu
+        stuck = _update_stuck(self.agent_id, (my_pos, enemy_pos, frozenset(boxes)))
+        enemy_block = {enemy_pos}
+        if stuck >= 2:
+            for _, dr, dc in self.moves:
+                enemy_block.add((enemy_pos[0] + dr, enemy_pos[1] + dc))
+        if stuck >= 4:
+            free_moves = []
+            for act, dr, dc in self.moves:
+                na = (my_pos[0] + dr, my_pos[1] + dc)
+                if na not in walls and na not in boxes and na != enemy_pos:
+                    free_moves.append(act)
+            if free_moves:
+                return random.choice(free_moves)
 
         # 1. Đích còn trống
         empty_targets = [t for t in targets if t not in boxes]
@@ -168,7 +194,7 @@ class Player2:
             if time.time() > timeout_time:
                 break
             other_b = boxes - {b}
-            plan = self._plan_gbfs(my_pos, b, t, other_b, enemy_pos, walls, width, height, maze_dist, deadlocks, timeout_time)
+            plan = self._plan_gbfs(my_pos, b, t, other_b, enemy_block, walls, width, height, maze_dist, deadlocks, timeout_time)
             if plan:
                 cost = len(plan)
                 # Ưu tiên nửa sân của mình (Agent 2 là bên phải)
@@ -188,15 +214,27 @@ class Player2:
         if best_plan and len(best_plan) > 0:
             return best_plan[0]
 
-        # 3. Xem xét cướp hộp nếu không còn hộp tự do
-        if not best_plan and empty_targets and time.time() < timeout_time:
-            enemy_boxes = [b for b in boxes if b in targets and owners.get(b) == enemy_id]
-            for b in enemy_boxes:
-                for t in empty_targets:
-                    other_b = boxes - {b}
-                    plan = self._plan_gbfs(my_pos, b, t, other_b, enemy_pos, walls, width, height, maze_dist, deadlocks, timeout_time)
-                    if plan and len(plan) > 0:
-                        return plan[0]
+        # 3. Không còn hộp tự do khả thi: cướp hộp đang nằm trên đích không thuộc về mình
+        # (đẩy ra khỏi đích rồi đặt lại vào một đích trống hoặc chính đích cũ)
+        if time.time() < timeout_time:
+            steal_boxes = [b for b in boxes if b in targets and owners.get(b) != self.agent_id]
+            steal_cands = []
+            for b in steal_boxes:
+                for t in empty_targets + [b]:
+                    d = maze_dist.get(t, {}).get(b, 999)
+                    if t == b:
+                        d = 2
+                    if d < 999:
+                        steal_cands.append((d, b, t))
+            # Greedy: thử cặp có ước lượng nhỏ nhất trước, có kế hoạch là dùng ngay
+            steal_cands.sort(key=lambda x: x[0])
+            for _, b, t in steal_cands:
+                if time.time() > timeout_time:
+                    break
+                other_b = boxes - {b}
+                plan = self._plan_gbfs(my_pos, b, t, other_b, enemy_block, walls, width, height, maze_dist, deadlocks, timeout_time)
+                if plan:
+                    return plan[0]
 
         return 'Wait'
 

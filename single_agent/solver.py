@@ -27,6 +27,9 @@ class SokobanSolver:
                 r, c = pos
                 for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     nr, nc = r + dr, c + dc
+                    # giới hạn trong bản đồ để không lan ra ngoài ở map có hàng ngắn
+                    if not (0 <= nr < self.env.height and 0 <= nc < self.env.width):
+                        continue
                     if (nr, nc) not in self.walls and (nr, nc) not in visited:
                         visited.add((nr, nc))
                         queue.append(((nr, nc), d + 1))
@@ -131,6 +134,10 @@ class SokobanSolver:
         while frontier:
             cost, _, current_state, path = heapq.heappop(frontier)
             agent_pos, boxes = current_state
+
+            # bỏ qua nếu đã có đường đi tốt hơn
+            if cost > visited.get(current_state, float('inf')):
+                continue
             expanded_nodes += 1
 
             # kiểm tra đích
@@ -144,10 +151,6 @@ class SokobanSolver:
                     'expanded': expanded_nodes,
                     'generated': generated_nodes
                 }
-
-            # bỏ qua nếu đã có đường đi tốt hơn
-            if cost > visited.get(current_state, float('inf')):
-                continue
 
             for action, next_agent, next_boxes in self._get_successors(agent_pos, boxes):
                 next_state = (next_agent, next_boxes)
@@ -188,6 +191,9 @@ class SokobanSolver:
         while frontier:
             f, g, _, current_state, path = heapq.heappop(frontier)
             agent_pos, boxes = current_state
+
+            if g > cost_so_far.get(current_state, float('inf')):
+                continue
             expanded_nodes += 1
 
             if set(boxes).issubset(self.targets):
@@ -200,9 +206,6 @@ class SokobanSolver:
                     'expanded': expanded_nodes,
                     'generated': generated_nodes
                 }
-
-            if g > cost_so_far.get(current_state, float('inf')):
-                continue
 
             for action, next_agent, next_boxes in self._get_successors(agent_pos, boxes):
                 next_state = (next_agent, next_boxes)

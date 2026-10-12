@@ -4,7 +4,8 @@ import os
 class SokobanTwoPlayerEnv:
     def __init__(self, map_path, max_steps=50):
         self.map_path = map_path
-        self.max_steps = max_steps
+        # số bước n phải là số nguyên dương
+        self.max_steps = max(1, int(max_steps))
         self.current_step = 0
 
         self.walls = set()
@@ -101,16 +102,10 @@ class SokobanTwoPlayerEnv:
         return score1, score2
 
     def is_game_over(self):
-        # hết số bước quy định
-        if self.current_step >= self.max_steps:
-            return True
-        # hoặc tất cả các ô đích đều đã có hộp
-        if len(self.targets) > 0 and self.targets.issubset(self.boxes):
-            return True
-        # hoặc tất cả các hộp đều đã nằm trên đích
-        if len(self.boxes) > 0 and self.boxes.issubset(self.targets):
-            return True
-        return False
+        # theo đề: trận đấu chỉ kết thúc sau đúng n bước do người dùng nhập
+        # không dừng sớm khi mọi đích đã có hộp vì agent vẫn được phép
+        # đẩy hộp của đối thủ ra khỏi đích rồi đặt lại để giành điểm
+        return self.current_step >= self.max_steps
 
     def get_winner(self):
         # xác định người chiến thắng

@@ -1,5 +1,6 @@
 # Danh sách thư viện phụ thuộc cho dự án Sokoban AI
-# Tương thích: Windows 10/11, macOS 13.7.8 (Ventura - Intel x86_64 / Apple Silicon)
-# Yêu cầu Python: >= 3.10
+# Đã kiểm tra: Windows 10/11 và macOS 13.7.8 (Ventura) chip Intel Core i5 (x86_64)
+# Yêu cầu Python: 3.10 - 3.13
+# pygame 2.6.1 có sẵn bản wheel cho macOS x86_64 (macOS >= 10.11) nên cài không cần biên dịch
 
-pygame>=2.5.0
+pygame==2.6.1

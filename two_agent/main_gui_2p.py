@@ -35,13 +35,17 @@ def load_agent_module(identifier):
     return importlib.import_module(identifier)
 
 class SokobanTwoPlayerGUI:
-    def __init__(self, map_path='maps/map_competitive.txt', max_steps=60, player1_mod='two_agent.player1', player2_mod='two_agent.player2'):
+    def __init__(self, map_path='maps/map_competitive.txt', max_steps=60, player1_mod='two_agent.player1', player2_mod='two_agent.player2', ask_steps=False):
         pygame.init()
         pygame.display.set_caption("Sokoban Competitive 2-Agent - AI Midterm")
 
         self.map_path = map_path
         self.max_steps = max_steps
         self.env = SokobanTwoPlayerEnv(map_path, max_steps=max_steps)
+
+        # khung nhập số bước n ngay trên cửa sổ game (yêu cầu 6)
+        self.entering_n = ask_steps
+        self.n_input = str(self.env.max_steps)
 
         # nạp thuật toán cho 2 agent từ file hoặc module riêng biệt
         self.p1_module_name = str(player1_mod)
@@ -144,6 +148,61 @@ class SokobanTwoPlayerGUI:
     def undo_game(self):
         # lùi lại 1 bước
         self.env.undo()
+
+    def reset_game(self):
+        # bắt đầu lại trận đấu
+        self.env.reset()
+        self.is_paused = True
+        self.time_agent1 = 0
+        self.time_agent2 = 0
+        self.last_act1 = 'None'
+        self.last_act2 = 'None'
+
+    def set_max_steps(self, n):
+        # cập nhật số bước n do người dùng nhập và chơi lại từ đầu
+        self.max_steps = max(1, n)
+        self.env.max_steps = self.max_steps
+        self.reset_game()
+
+    def handle_n_input(self, event):
+        # xử lý phím khi đang nhập số bước n
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            if self.n_input.isdigit() and int(self.n_input) > 0:
+                self.set_max_steps(int(self.n_input))
+                self.entering_n = False
+        elif event.key == pygame.K_ESCAPE:
+            self.n_input = str(self.env.max_steps)
+            self.entering_n = False
+        elif event.key == pygame.K_BACKSPACE:
+            self.n_input = self.n_input[:-1]
+        elif event.unicode.isdigit() and len(self.n_input) < 4:
+            self.n_input += event.unicode
+
+    def draw_n_input_modal(self):
+        # hộp thoại nhập số bước n
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        overlay.fill((12, 15, 22, 220))
+        self.screen.blit(overlay, (0, 0))
+
+        modal_w, modal_h = 400, 200
+        modal_x = (self.screen_width - modal_w) // 2
+        modal_y = (self.screen_height - modal_h) // 2
+        modal_rect = pygame.Rect(modal_x, modal_y, modal_w, modal_h)
+        pygame.draw.rect(self.screen, (28, 32, 44), modal_rect, border_radius=12)
+        pygame.draw.rect(self.screen, (241, 196, 15), modal_rect, width=2, border_radius=12)
+
+        title = self.font_large.render("NHAP SO BUOC THI DAU n", True, (241, 196, 15))
+        self.screen.blit(title, (modal_x + (modal_w - title.get_width()) // 2, modal_y + 20))
+
+        box_rect = pygame.Rect(modal_x + 120, modal_y + 70, 160, 44)
+        pygame.draw.rect(self.screen, (45, 48, 60), box_rect, border_radius=8)
+        pygame.draw.rect(self.screen, (200, 200, 210), box_rect, width=2, border_radius=8)
+        cursor = "|" if (pygame.time.get_ticks() // 500) % 2 == 0 else " "
+        val = self.font_large.render(self.n_input + cursor, True, (255, 255, 255))
+        self.screen.blit(val, (box_rect.x + (box_rect.w - val.get_width()) // 2, box_rect.y + 10))
+
+        hint = self.font_small.render("Go so nguyen duong roi nhan Enter  |  Esc: huy", True, (180, 185, 200))
+        self.screen.blit(hint, (modal_x + (modal_w - hint.get_width()) // 2, modal_y + 140))
 
     def draw_board(self):
         offset_x = 20
@@ -289,7 +348,8 @@ class SokobanTwoPlayerGUI:
             ("Space", "Tam dung / Chay tiep"),
             ("Mui ten ->", "Tien 1 buoc"),
             ("Mui ten <-", "Lui 1 buoc (undo)"),
-            ("Phim R", "Bat dau lai")
+            ("Phim R", "Bat dau lai"),
+            ("Phim N", "Nhap lai so buoc n")
         ]
         for k, v in guides:
             self.screen.blit(self.font_small.render(f"- {k}: {v}", True, self.color_text_muted), (sb_x + 15, cur_y))
@@ -346,11 +406,8 @@ class SokobanTwoPlayerGUI:
         score_surf = self.font_medium.render(score_text, True, (240, 240, 240))
         self.screen.blit(score_surf, (modal_x + (modal_w - score_surf.get_width()) // 2, modal_y + 100))
 
-        # Lý do kết thúc trận đấu
-        if len(self.env.targets) > 0 and self.env.targets.issubset(self.env.boxes):
-            reason_text = f"Tat ca {len(self.env.targets)} o dich deu da co hop! (Buoc {self.env.current_step}/{self.env.max_steps})"
-        else:
-            reason_text = f"Da dat gioi han {self.env.max_steps} luot di quy dinh"
+        # Lý do kết thúc trận đấu: luôn là đủ n bước theo đề
+        reason_text = f"Da du n = {self.env.max_steps} buoc. Ben nhieu hop tren dich hon thang."
         reason_surf = self.font_small.render(reason_text, True, (160, 170, 190))
         self.screen.blit(reason_surf, (modal_x + (modal_w - reason_surf.get_width()) // 2, modal_y + 138))
 
@@ -358,7 +415,7 @@ class SokobanTwoPlayerGUI:
         pygame.draw.line(self.screen, (55, 62, 80), (modal_x + 25, modal_y + 172), (modal_x + modal_w - 25, modal_y + 172), 1)
 
         # Hướng dẫn thao tác
-        hint_text = "Nhan [R]: Bat dau lai   |   Nhan [<-]: Lui buoc (Undo)"
+        hint_text = "[R]: Bat dau lai  |  [N]: Doi so buoc n  |  [<-]: Undo"
         hint_surf = self.font_small.render(hint_text, True, (210, 215, 230))
         self.screen.blit(hint_surf, (modal_x + (modal_w - hint_surf.get_width()) // 2, modal_y + 192))
 
@@ -370,6 +427,8 @@ class SokobanTwoPlayerGUI:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.KEYDOWN and self.entering_n:
+                    self.handle_n_input(event)
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         self.is_paused = not self.is_paused
@@ -380,15 +439,14 @@ class SokobanTwoPlayerGUI:
                         self.is_paused = True
                         self.undo_game()
                     elif event.key == pygame.K_r:
-                        self.env.reset()
+                        self.reset_game()
+                    elif event.key == pygame.K_n:
                         self.is_paused = True
-                        self.time_agent1 = 0
-                        self.time_agent2 = 0
-                        self.last_act1 = 'None'
-                        self.last_act2 = 'None'
+                        self.n_input = ""
+                        self.entering_n = True
 
             # tự động chơi khi không tạm dừng
-            if not self.is_paused and not self.env.is_game_over():
+            if not self.is_paused and not self.entering_n and not self.env.is_game_over():
                 if current_time - self.last_step_time >= self.step_delay:
                     self.step_game()
                     self.last_step_time = current_time
@@ -397,6 +455,8 @@ class SokobanTwoPlayerGUI:
             self.draw_board()
             self.draw_game_over_modal()
             self.draw_sidebar()
+            if self.entering_n:
+                self.draw_n_input_modal()
 
             pygame.display.flip()
             self.clock.tick(60)
@@ -407,7 +467,8 @@ if __name__ == '__main__':
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
 
-    map_file = os.path.join('maps', 'map_competitive.txt')
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    map_file = os.path.join(root_dir, 'maps', 'map_competitive.txt')
     steps = 60
     p1_mod = 'two_agent.player1'
     p2_mod = 'two_agent.player2'
@@ -417,7 +478,7 @@ if __name__ == '__main__':
     has_cli_steps = False
     for arg in sys.argv[1:]:
         if arg.isdigit():
-            steps = int(arg)
+            steps = max(1, int(arg))
             has_cli_steps = True
         elif arg.endswith('.txt'):
             map_file = arg
@@ -429,17 +490,14 @@ if __name__ == '__main__':
     if len(custom_mods) >= 2:
         p2_mod = custom_mods[1]
 
-    # yêu cầu 6: số bước n được nhập bởi người dùng (nếu không truyền qua dòng lệnh)
-    if not has_cli_steps and sys.stdin.isatty():
-        try:
-            user_input = input("Nhap so buoc thi dau n (nhan Enter de mac dinh 60): ").strip()
-            if user_input.isdigit():
-                steps = int(user_input)
-        except (EOFError, KeyboardInterrupt):
-            pass
+    if not os.path.exists(map_file):
+        print(f"Khong tim thay file ban do: {map_file}")
+        sys.exit(1)
 
+    # yêu cầu 6: số bước n do người dùng nhập
+    # nếu không truyền qua dòng lệnh thì hiện khung nhập n ngay khi mở game
     try:
-        gui = SokobanTwoPlayerGUI(map_path=map_file, max_steps=steps, player1_mod=p1_mod, player2_mod=p2_mod)
+        gui = SokobanTwoPlayerGUI(map_path=map_file, max_steps=steps, player1_mod=p1_mod, player2_mod=p2_mod, ask_steps=not has_cli_steps)
         gui.run()
     except KeyboardInterrupt:
         pygame.quit()
