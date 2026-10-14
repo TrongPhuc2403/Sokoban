@@ -12,8 +12,35 @@ from single_agent.game_env import SokobanEnv
 from single_agent.solver import SokobanSolver
 
 
+def legal_successors(env, state):
+    """Sinh các nước đi hợp lệ theo luật chơi, không cắt tỉa deadlock."""
+    agent, boxes = state
+    boxes_set = set(boxes)
+    for action, (dr, dc) in env.directions.items():
+        next_agent = (agent[0] + dr, agent[1] + dc)
+        if not (0 <= next_agent[0] < env.height and 0 <= next_agent[1] < env.width):
+            continue
+        if next_agent in env.walls:
+            continue
+
+        next_boxes = boxes
+        if next_agent in boxes_set:
+            box_destination = (next_agent[0] + dr, next_agent[1] + dc)
+            if not (0 <= box_destination[0] < env.height and 0 <= box_destination[1] < env.width):
+                continue
+            if box_destination in env.walls or box_destination in boxes_set:
+                continue
+
+            moved_boxes = boxes_set.copy()
+            moved_boxes.remove(next_agent)
+            moved_boxes.add(box_destination)
+            next_boxes = tuple(sorted(moved_boxes))
+
+        yield (next_agent, next_boxes)
+
+
 def check_map(map_file):
-    """Tính khoảng cách tối ưu thật và kiểm tra mọi trạng thái/cạnh đạt được."""
+    """Tính khoảng cách tối ưu và kiểm tra toàn bộ đồ thị hợp lệ đạt được."""
     started = time.perf_counter()
     env = SokobanEnv(map_file)
     solver = SokobanSolver(env)
@@ -27,7 +54,7 @@ def check_map(map_file):
 
     while queue:
         state = queue.popleft()
-        for _action, next_state in solver._get_successors(state):
+        for next_state in legal_successors(env, state):
             edges.append((state, next_state))
             reverse_edges.setdefault(next_state, []).append(state)
             if next_state not in states:
@@ -77,7 +104,8 @@ def check_map(map_file):
 
 
 def main():
-    sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     maps = [
         PROJECT_FOLDER / 'maps' / 'map_small.txt',
         PROJECT_FOLDER / 'maps' / 'map_medium.txt',

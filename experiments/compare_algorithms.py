@@ -26,7 +26,9 @@ def compare_map(map_file):
 
 
 def main():
-    sys.stdout.reconfigure(encoding='utf-8')
+    # Một số IDE chuyển stdout thành đối tượng không có reconfigure().
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
     maps = [
         PROJECT_FOLDER / 'maps' / 'map_small.txt',
         PROJECT_FOLDER / 'maps' / 'map_medium.txt',
