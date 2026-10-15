@@ -8,7 +8,7 @@ NAME = "GBFS"
 
 _maze_dist_cache = {}
 _deadlock_cache = {}
-# nho trang thai luot truoc de phat hien hai agent ket nhau (livelock)
+# luu trang thai truoc de tranh bi ket
 _last_seen = {}
 
 
@@ -171,23 +171,20 @@ class Player2:
             if free_moves:
                 return random.choice(free_moves)
 
-        # 1. Đích còn trống
+        # Uu tien tim duong dua hop chua vao dich
         empty_targets = [t for t in targets if t not in boxes]
-
-        # 2. Hộp tự do
         free_boxes = [b for b in boxes if b not in targets]
 
         best_plan = None
         best_score = float('inf')
 
-        # Đánh giá các cặp (hộp tự do, đích trống)
+        # Danh gia cac cap hop va dich
         candidates = []
         for b in free_boxes:
             for t in empty_targets:
                 d = maze_dist.get(t, {}).get(b, 999)
                 if d < 999:
                     candidates.append((d, b, t))
-        # Greedy: ưu tiên hộp gần đích nhất
         candidates.sort(key=lambda x: x[0])
 
         for _, b, t in candidates:
@@ -197,7 +194,6 @@ class Player2:
             plan = self._plan_gbfs(my_pos, b, t, other_b, enemy_block, walls, width, height, maze_dist, deadlocks, timeout_time)
             if plan:
                 cost = len(plan)
-                # Ưu tiên nửa sân của mình (Agent 2 là bên phải)
                 mid_col = width // 2
                 if self.agent_id == 2 and b[1] < mid_col:
                     cost += 4
@@ -210,12 +206,10 @@ class Player2:
                     if cost <= 6:
                         break
 
-        # Nếu có kế hoạch, trả về bước đầu tiên
         if best_plan and len(best_plan) > 0:
             return best_plan[0]
 
-        # 3. Không còn hộp tự do khả thi: cướp hộp đang nằm trên đích không thuộc về mình
-        # (đẩy ra khỏi đích rồi đặt lại vào một đích trống hoặc chính đích cũ)
+        # Neu khong con hop trong thi tim cach chiem hop cua doi phuong
         if time.time() < timeout_time:
             steal_boxes = [b for b in boxes if b in targets and owners.get(b) != self.agent_id]
             steal_cands = []
@@ -226,7 +220,6 @@ class Player2:
                         d = 2
                     if d < 999:
                         steal_cands.append((d, b, t))
-            # Greedy: thử cặp có ước lượng nhỏ nhất trước, có kế hoạch là dùng ngay
             steal_cands.sort(key=lambda x: x[0])
             for _, b, t in steal_cands:
                 if time.time() > timeout_time:
@@ -239,16 +232,7 @@ class Player2:
         return 'Wait'
 
 
-def get_action(*args, **kwargs):
+def get_action(*args):
     if len(args) == 1:
-        game_state = args[0]
-        agent_id = 2
-    elif len(args) >= 2:
-        agent_id = args[0]
-        game_state = args[1]
-    else:
-        game_state = kwargs.get('game_state', kwargs.get('state'))
-        agent_id = kwargs.get('agent_id', 2)
-
-    agent = Player2(agent_id)
-    return agent.get_action(game_state)
+        return Player2(2).get_action(args[0])
+    return Player2(args[0]).get_action(args[1])

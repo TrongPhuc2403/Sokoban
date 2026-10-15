@@ -116,6 +116,9 @@ class SokobanSolver:
 
         return successors
 
+    def _is_goal(self, state):
+        return set(state[1]).issubset(self.targets)
+
     def solve_ucs(self):
         # ucs mở rộng theo g nhỏ nhất
         start_time = time.time()
@@ -130,8 +133,10 @@ class SokobanSolver:
 
         expanded_nodes = 0
         generated_nodes = 1
+        peak_frontier = 1
 
         while frontier:
+            peak_frontier = max(peak_frontier, len(frontier))
             cost, _, current_state, path = heapq.heappop(frontier)
             agent_pos, boxes = current_state
 
@@ -149,7 +154,8 @@ class SokobanSolver:
                     'cost': cost,
                     'time_ms': exec_time,
                     'expanded': expanded_nodes,
-                    'generated': generated_nodes
+                    'generated': generated_nodes,
+                    'peak_frontier': peak_frontier
                 }
 
             for action, next_agent, next_boxes in self._get_successors(agent_pos, boxes):
@@ -169,7 +175,8 @@ class SokobanSolver:
             'cost': 0,
             'time_ms': exec_time,
             'expanded': expanded_nodes,
-            'generated': generated_nodes
+            'generated': generated_nodes,
+            'peak_frontier': peak_frontier
         }
 
     def solve_astar(self):
@@ -187,8 +194,10 @@ class SokobanSolver:
 
         expanded_nodes = 0
         generated_nodes = 1
+        peak_frontier = 1
 
         while frontier:
+            peak_frontier = max(peak_frontier, len(frontier))
             f, g, _, current_state, path = heapq.heappop(frontier)
             agent_pos, boxes = current_state
 
@@ -204,7 +213,8 @@ class SokobanSolver:
                     'cost': g,
                     'time_ms': exec_time,
                     'expanded': expanded_nodes,
-                    'generated': generated_nodes
+                    'generated': generated_nodes,
+                    'peak_frontier': peak_frontier
                 }
 
             for action, next_agent, next_boxes in self._get_successors(agent_pos, boxes):
@@ -226,7 +236,8 @@ class SokobanSolver:
             'cost': 0,
             'time_ms': exec_time,
             'expanded': expanded_nodes,
-            'generated': generated_nodes
+            'generated': generated_nodes,
+            'peak_frontier': peak_frontier
         }
 
 if __name__ == '__main__':

@@ -1,103 +1,98 @@
 # Dự án Sokoban
 
-Dự án gồm phần Sokoban một tác nhân theo yêu cầu 1–4 và phần thi đấu hai tác nhân theo các mục 5–8 trong mã nguồn gốc. Mã được tách theo chức năng; chú thích và tài liệu dùng tiếng Việt có dấu. Các thuật toán được viết thành những bước nhỏ để thuận tiện đọc và chỉnh sửa.
+Dự án gồm phần Sokoban một tác nhân (Yêu cầu 1–4) và phần thi đấu hai tác nhân (Yêu cầu 5–8). Mã nguồn được chia theo module rõ ràng, có đầy đủ kiểm thử tự động và tài liệu thực nghiệm.
 
 ## Cấu trúc thư mục
 
 ```text
 AI/
-├── maps/                         # Bản đồ đầu vào
+├── maps/                         # Các file bản đồ (.txt)
 ├── single_agent/                 # Sokoban một người chơi
-│   ├── game_env.py               # Trạng thái, luật đi, undo và hiển thị
-│   ├── solver.py                 # UCS, A* và heuristic khoảng cách mê cung
-│   ├── main_cli.py               # Chạy lời giải trong terminal
-│   └── main_gui.py               # Giao diện Pygame
+│   ├── game_env.py               # Môi trường, trạng thái, undo
+│   ├── solver.py                 # Bộ giải UCS, A* (khoảng cách mê cung BFS)
+│   ├── main_cli.py               # Chạy giải thuật trên terminal
+│   └── main_gui.py               # Giao diện đồ họa Pygame
 ├── two_agent/                    # Sokoban đối kháng hai người chơi
-│   ├── game_env_2p.py            # Luật lượt đồng thời, va chạm, điểm và undo
-│   ├── player1.py                # Agent 1 dùng A* (f = g + h)
-│   ├── player2.py                # Agent 2 dùng GBFS (f = h)
-│   └── main_gui_2p.py            # Giao diện trận đấu
+│   ├── game_env_2p.py            # Luật thi đấu đồng thời, va chạm, xác suất p, điểm số
+│   ├── player1.py                # Agent 1: thuật toán A* (f = g + h)
+│   ├── player2.py                # Agent 2: thuật toán GBFS (f = h)
+│   └── main_gui_2p.py            # Giao diện thi đấu Pygame
 ├── experiments/
-│   ├── compare_algorithms.py     # YC3: đo riêng UCS và A*
-│   └── check_heuristic.py        # YC4: kiểm tra tính chất heuristic
-├── docs/bao_cao.md                # Mô hình, phân tích và kết quả YC1–4
-├── test_all.py                   # Kiểm tra nhanh phần một và hai tác nhân
-└── HUONG_DAN_CHAY.txt            # Hướng dẫn ngắn
+│   ├── compare_algorithms.py     # YC3: Thực nghiệm so sánh UCS và A*
+│   └── check_heuristic.py        # YC4: Kiểm chứng tính admissible và consistent của heuristic
+├── docs/
+│   └── bao_cao.md                # Báo cáo mô hình không gian trạng thái & thực nghiệm
+├── test_all.py                   # File kiểm tra tự động toàn bộ chức năng
+└── HUONG_DAN_CHAY.txt            # Hướng dẫn chạy nhanh
 ```
 
-## Yêu cầu môi trường
+## Cài đặt môi trường
 
-- Python 3.10 trở lên.
-- Chỉ cần cài `pygame` nếu chạy giao diện đồ họa.
-- Mở terminal tại thư mục `AI/` trước khi chạy các lệnh bên dưới.
-
-```text
-python -m pip install pygame
+- Python 3.10 trở lên (tương thích Windows, Linux và macOS Ventura).
+- Cài đặt thư viện đồ họa:
+```bash
+pip install -r requirements.txt
 ```
 
-## YC1–4: Sokoban một tác nhân
+---
 
-Mỗi trạng thái gồm vị trí người chơi và tập vị trí các hộp. Mỗi hành động là một bước lên, xuống, trái hoặc phải; hành động đẩy hộp chỉ hợp lệ nếu ô phía sau hộp trống. Trạng thái kết thúc khi tất cả hộp ở trên đích. Chi phí mỗi bước bằng 1.
+## Hướng dẫn chạy các chức năng
 
-UCS mở rộng trạng thái có chi phí đường đi nhỏ nhất. A* dùng `f(n) = g(n) + h(n)`, trong đó `h` là tổng khoảng cách mê cung từ hộp tới đích gần nhất tương ứng; khoảng cách được tính bằng BFS trên bản đồ, không dùng khoảng cách Euclid hay Manhattan. YC3 đo UCS và A* riêng trên bản đồ mẫu. YC4 có chương trình kiểm tra riêng tính admissible và consistency bằng duyệt trạng thái, cạnh chuyển tiếp và so sánh với chi phí tối ưu.
-
-Chạy kiểm tra cơ bản và thí nghiệm:
-
-```text
+### 1. Kiểm tra tự động
+```bash
 python test_all.py
+```
+
+### 2. YC1–4: Một tác nhân & Thực nghiệm
+- Chạy giải thuật tìm kiếm trên terminal:
+```bash
 python single_agent/main_cli.py maps/map_small.txt astar
+python single_agent/main_cli.py maps/map_small.txt ucs
+```
+- Chạy thực nghiệm so sánh UCS và A* (YC3):
+```bash
 python experiments/compare_algorithms.py
+```
+- Chạy kiểm chứng tính chất Heuristic (YC4):
+```bash
 python experiments/check_heuristic.py
 ```
-
-Tham số thuật toán của CLI nhận `ucs` hoặc `astar`. Có thể thay `map_small.txt` bằng một tệp bản đồ khác.
-
-Giao diện đồ họa:
-
-```text
-python single_agent/main_gui.py maps/map_medium.txt
+- Chạy giao diện 1 người chơi (YC5 - Pygame):
+```bash
+python single_agent/main_gui.py maps/example_map.txt
 ```
+  - Phím `1` / Nút UCS: Chạy UCS.
+  - Phím `2` / Nút A*: Chạy A*.
+  - Phím `Space`: Tạm dừng / Tiếp tục tự động.
+  - Mũi tên `->`: Đi tới 1 bước.
+  - Mũi tên `<-`: Lùi 1 bước (Undo).
+  - Phím `R`: Đặt lại trạng thái ban đầu.
 
-Trong GUI, phím `1` chạy UCS, `2` chạy A*, phím cách chạy/tạm dừng, mũi tên phải tiến một bước, mũi tên trái hoàn tác và `R` đặt lại bản đồ.
+---
 
-## YC5–6: Môi trường thi đấu hai tác nhân
-
-Hai tác nhân chọn hành động từ cùng một trạng thái rồi môi trường áp dụng trong một lượt đồng thời. Nếu hai người chơi va chạm, đổi chỗ, cùng muốn vào một ô hoặc xung đột khi đẩy hộp, các nước đi liên quan bị hủy để tránh chồng lấn trạng thái. Đi ra ngoài biên, vào tường, đẩy hộp ra ngoài bản đồ hoặc đẩy vào hộp khác đều không làm thay đổi vị trí. Mỗi lượt hợp lệ của trận đấu tăng bộ đếm một lần.
-
-Hộp nằm trên đích được tính điểm cho tác nhân đã đẩy hộp vào đích. Đẩy hộp ra khỏi đích sẽ xóa quyền sở hữu điểm. Trận đấu kết thúc khi hết số lượt cấu hình, tất cả đích có hộp hoặc tất cả hộp nằm trên đích; điểm cao hơn thắng, bằng điểm thì hòa. Môi trường có `undo()` để quay lại trạng thái trước đó.
-
-## YC7–8: Agent A* và GBFS
-
-Agent 1 trong `player1.py` dùng A* với `f = g + h`; Agent 2 trong `player2.py` dùng GBFS với `f = h`. Cả hai tính khoảng cách mê cung bằng BFS, tránh các ô deadlock phát hiện bằng duyệt ngược từ đích và trả về một trong các hướng `North`, `South`, `West`, `East` hoặc `Wait`. GUI đưa trạng thái chung cho cả hai bộ chọn, sau đó gửi hai hành động vào môi trường trong cùng lượt.
-
-Chạy trận đấu mặc định trên bản đồ đối kháng, giới hạn 60 lượt:
-
-```text
+### 3. YC5–8: Thi đấu hai tác nhân đối kháng
+- Chạy giao diện thi đấu:
+```bash
 python two_agent/main_gui_2p.py maps/map_competitive.txt 60
 ```
-
-Có thể đổi bản đồ hoặc số lượt, ví dụ:
-
-```text
-python two_agent/main_gui_2p.py maps/map_competitive.txt 30
+- Có thể chỉ định file code của 2 bot (hỗ trợ thi đấu giữa các nhóm):
+```bash
+python two_agent/main_gui_2p.py maps/map_competitive.txt 60 two_agent/player1.py two_agent/player2.py
 ```
 
-Trong giao diện hai tác nhân: phím cách chạy/tạm dừng, mũi tên phải tính và chạy một lượt, mũi tên trái hoàn tác, `R` bắt đầu lại. Bảng bên phải hiển thị số lượt, điểm và hành động gần nhất.
+#### Quy tắc thi đấu (Yêu cầu 6):
+- Trận đấu kết thúc sau đúng `n` bước do người dùng nhập (nhập trên dòng lệnh hoặc bấm phím `N` trên giao diện).
+- Hai agent hành động đồng thời trong mỗi lượt, không đi xuyên qua nhau.
+- Agent được phép đẩy hộp của đối thủ ra khỏi ô đích rồi đặt lại để cướp điểm.
+- **Xử lý tranh chấp:** Nếu hai agent cùng muốn đi vào một vị trí hoặc cùng đẩy một hộp:
+  - Sinh ngẫu nhiên xác suất $p$ theo phân bố đều liên tục $U(0, 1)$.
+  - Nếu $p < 0.5$: **Agent 1** thực hiện được hành động, **Agent 2** đứng yên (mất lượt).
+  - Ngược lại ($p \ge 0.5$): **Agent 2** thực hiện được hành động, **Agent 1** đứng yên (mất lượt).
+  - Giá trị $p$ và người thắng tranh chấp hiển thị trực tiếp ở bảng điều khiển bên phải.
 
-## Định dạng bản đồ
-
-Mỗi ký tự tương ứng một ô; giữ nguyên khoảng trắng ở cuối dòng nếu cần để bảo toàn bề rộng bản đồ.
-
-| Ký hiệu | Ý nghĩa |
-|---|---|
-| `%` | Tường |
-| `A` | Người chơi trong chế độ một tác nhân; vị trí Agent 1 trong chế độ hai tác nhân |
-| `Z` | Vị trí Agent 2 trong chế độ hai tác nhân |
-| `B` | Hộp |
-| `D` | Đích |
-| `C` | Hộp đang nằm trên đích |
-| Dấu cách | Ô trống |
-
-## Tài liệu kết quả
-
-Kết quả đo UCS/A* và kiểm chứng heuristic được ghi trong [docs/bao_cao.md](docs/bao_cao.md). Thời gian chạy có thể thay đổi tùy máy; số trạng thái mở rộng, sinh ra và kích thước frontier hữu ích hơn để so sánh giữa các lần chạy.
+#### Phím điều khiển trong giao diện 2 người chơi:
+- `Space`: Tạm dừng / Tiếp tục.
+- `->`: Tiến 1 bước.
+- `<-`: Lùi 1 bước (Undo).
+- `R`: Bắt đầu lại trận đấu.
+- `N`: Nhập lại số bước `n`.

@@ -8,7 +8,7 @@ NAME = "A*"
 
 _maze_dist_cache = {}
 _deadlock_cache = {}
-# nho trang thai luot truoc de phat hien hai agent ket nhau (livelock)
+# luu trang thai truoc de tranh bi ket
 _last_seen = {}
 
 
@@ -179,23 +179,20 @@ class Player1:
             if free_moves:
                 return random.choice(free_moves)
 
-        # 1. Đích còn trống (chưa có hộp nào nằm trên đó)
+        # Uu tien tim duong dua hop chua vao dich
         empty_targets = [t for t in targets if t not in boxes]
-
-        # 2. Hộp tự do (chưa nằm trên bất kỳ đích nào)
         free_boxes = [b for b in boxes if b not in targets]
 
         best_plan = None
         best_score = float('inf')
 
-        # Đánh giá các cặp (hộp tự do, đích trống)
+        # Danh gia cac cap hop va dich
         candidates = []
         for b in free_boxes:
             for t in empty_targets:
                 d = maze_dist.get(t, {}).get(b, 999)
                 if d < 999:
                     candidates.append((d, b, t))
-        # Ưu tiên cặp có khoảng cách ngắn
         candidates.sort(key=lambda x: x[0])
 
         for _, b, t in candidates:
@@ -205,7 +202,6 @@ class Player1:
             plan = self._plan_astar(my_pos, b, t, other_b, enemy_block, walls, width, height, maze_dist, deadlocks, timeout_time)
             if plan:
                 cost = len(plan)
-                # Ưu tiên bảo vệ và đẩy hộp thuộc nửa sân của mình trước
                 mid_col = width // 2
                 if self.agent_id == 1 and b[1] >= mid_col:
                     cost += 4
@@ -215,16 +211,13 @@ class Player1:
                 if cost < best_score:
                     best_score = cost
                     best_plan = plan
-                    # Tìm thấy kế hoạch rất ngắn thì chọn ngay để tiết kiệm thời gian
                     if cost <= 6:
                         break
 
-        # Nếu có kế hoạch, trả về bước đầu tiên
         if best_plan and len(best_plan) > 0:
             return best_plan[0]
 
-        # 3. Không còn hộp tự do khả thi: cướp hộp đang nằm trên đích không thuộc về mình
-        # (đẩy ra khỏi đích rồi đặt lại vào một đích trống hoặc chính đích cũ)
+        # Neu khong con hop trong thi tim cach chiem hop cua doi phuong
         if time.time() < timeout_time:
             steal_boxes = [b for b in boxes if b in targets and owners.get(b) != self.agent_id]
             steal_cands = []
@@ -248,20 +241,10 @@ class Player1:
             if best_steal:
                 return best_steal[0]
 
-        # 4. Không có kế hoạch nào khả thi thì đứng yên
         return 'Wait'
 
 
-def get_action(*args, **kwargs):
+def get_action(*args):
     if len(args) == 1:
-        game_state = args[0]
-        agent_id = 1
-    elif len(args) >= 2:
-        agent_id = args[0]
-        game_state = args[1]
-    else:
-        game_state = kwargs.get('game_state', kwargs.get('state'))
-        agent_id = kwargs.get('agent_id', 1)
-
-    agent = Player1(agent_id)
-    return agent.get_action(game_state)
+        return Player1(1).get_action(args[0])
+    return Player1(args[0]).get_action(args[1])

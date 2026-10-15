@@ -1,12 +1,18 @@
 # môi trường trò chơi sokoban đối kháng 2 agent
 import os
+import random
 
 class SokobanTwoPlayerEnv:
-    def __init__(self, map_path, max_steps=50):
+    def __init__(self, map_path, max_steps=50, seed=None):
         self.map_path = map_path
         # số bước n phải là số nguyên dương
         self.max_steps = max(1, int(max_steps))
         self.current_step = 0
+
+        # bộ sinh số ngẫu nhiên riêng để phân xử tranh chấp (cố định seed khi test)
+        self.rng = random.Random(seed)
+        # thông tin tranh chấp lượt gần nhất: None hoặc {'type', 'p', 'winner'}
+        self.last_conflict = None
 
         self.walls = set()
         self.targets = set()
@@ -72,6 +78,7 @@ class SokobanTwoPlayerEnv:
         self.boxes = set(self.initial_boxes)
         self.box_owners = {b: None for b in self.boxes}
         self.history = []
+        self.last_conflict = None
         return self.get_state()
 
     def get_state(self):
@@ -102,9 +109,8 @@ class SokobanTwoPlayerEnv:
         return score1, score2
 
     def is_game_over(self):
-        # theo đề: trận đấu chỉ kết thúc sau đúng n bước do người dùng nhập
-        # không dừng sớm khi mọi đích đã có hộp vì agent vẫn được phép
-        # đẩy hộp của đối thủ ra khỏi đích rồi đặt lại để giành điểm
+        # tran dau chi ket thuc khi di het so buoc quy dinh
+        # cho phep agent day hop cua doi thu ra khoi dich de gianh diem
         return self.current_step >= self.max_steps
 
     def get_winner(self):
@@ -140,6 +146,39 @@ class SokobanTwoPlayerEnv:
         # đi vào ô trống
         return next_agent, None, None
 
+    def _detect_conflict(self, next_a1, push_from1, push_to1, next_a2, push_from2, push_to2):
+        # trả về loại tranh chấp (chuỗi) hoặc None nếu không có tranh chấp
+        moved1 = next_a1 != self.agent1_pos
+        moved2 = next_a2 != self.agent2_pos
+        if not (moved1 and moved2):
+            return None
+
+        # hai agent cùng đẩy một hộp
+        if push_from1 is not None and push_from1 == push_from2:
+            return 'same_box'
+        # hai agent cùng đi vào một vị trí
+        if next_a1 == next_a2:
+            return 'same_cell'
+        # hai hộp bị đẩy vào cùng một vị trí
+        if push_to1 is not None and push_to1 == push_to2:
+            return 'same_cell'
+        # hộp do agent này đẩy và agent kia cùng đi vào một vị trí
+        if push_to1 is not None and push_to1 == next_a2:
+            return 'same_cell'
+        if push_to2 is not None and push_to2 == next_a1:
+            return 'same_cell'
+        return None
+
+    def _apply_push(self, agent_id, push_from, push_to):
+        # di chuyển hộp và cập nhật quyền sở hữu
+        if push_to is None or push_from not in self.boxes:
+            return
+        self.boxes.remove(push_from)
+        self.boxes.add(push_to)
+        self.box_owners.pop(push_from, None)
+        # vào đích thì agent đẩy chiếm quyền sở hữu, ra khỏi đích thì mất
+        self.box_owners[push_to] = agent_id if push_to in self.targets else None
+
     def step(self, action1, action2):
         # cả hai agent hành động đồng thời trong một lượt
         if self.is_game_over():
@@ -151,78 +190,40 @@ class SokobanTwoPlayerEnv:
             'a2': self.agent2_pos,
             'boxes': set(self.boxes),
             'owners': dict(self.box_owners),
-            'step': self.current_step
+            'step': self.current_step,
+            'conflict': self.last_conflict
         })
+        self.last_conflict = None
 
         # tính toán ý định di chuyển
         next_a1, push_from1, push_to1 = self._simulate_agent_intent(1, self.agent1_pos, action1, self.agent2_pos, self.boxes)
         next_a2, push_from2, push_to2 = self._simulate_agent_intent(2, self.agent2_pos, action2, self.agent1_pos, self.boxes)
 
-        # xử lý va chạm trực tiếp giữa hai agent
-        # trường hợp 1: hai agent đổi chỗ nhau (swap)
+        # hai agent đổi chỗ cho nhau: không đi vào cùng vị trí nên cả hai đứng yên
+        # (thực tế _simulate_agent_intent đã chặn việc bước vào ô agent kia đang đứng)
         if next_a1 == self.agent2_pos and next_a2 == self.agent1_pos:
-            next_a1 = self.agent1_pos
-            next_a2 = self.agent2_pos
-            push_from1, push_to1 = None, None
-            push_from2, push_to2 = None, None
+            next_a1, push_from1, push_to1 = self.agent1_pos, None, None
+            next_a2, push_from2, push_to2 = self.agent2_pos, None, None
 
-        # trường hợp 2: hai agent cùng bước vào cùng một ô
-        if next_a1 == next_a2 and next_a1 != self.agent1_pos and next_a2 != self.agent2_pos:
-            next_a1 = self.agent1_pos
-            next_a2 = self.agent2_pos
-            push_from1, push_to1 = None, None
-            push_from2, push_to2 = None, None
+        # xu ly tranh chap khi hai agent cung vao mot o hoac cung day mot hop
+        # xac suat p sinh theo phan bo deu U(0, 1)
+        # p < 0.5 thi agent 1 di, agent 2 dung yen; nguoc lai agent 2 di
+        conflict = self._detect_conflict(next_a1, push_from1, push_to1, next_a2, push_from2, push_to2)
+        if conflict is not None:
+            p = self.rng.uniform(0.0, 1.0)
+            if p < 0.5:
+                winner = 1
+                next_a2, push_from2, push_to2 = self.agent2_pos, None, None
+            else:
+                winner = 2
+                next_a1, push_from1, push_to1 = self.agent1_pos, None, None
+            self.last_conflict = {'type': conflict, 'p': p, 'winner': winner}
 
-        # trường hợp 3: cả hai cùng đẩy cùng một hộp hoặc đẩy hộp vào cùng một ô
-        if push_to1 is not None and push_to2 is not None:
-            if push_from1 == push_from2 or push_to1 == push_to2:
-                # xung đột đẩy hộp hủy nước đi của cả hai
-                next_a1 = self.agent1_pos
-                next_a2 = self.agent2_pos
-                push_from1, push_to1 = None, None
-                push_from2, push_to2 = None, None
-
-        # trường hợp 4: một agent đẩy hộp vào ô agent kia bước tới
-        if push_to1 is not None and push_to1 == next_a2:
-            next_a1 = self.agent1_pos
-            next_a2 = self.agent2_pos
-            push_from1, push_to1 = None, None
-            push_from2, push_to2 = None, None
-
-        if push_to2 is not None and push_to2 == next_a1:
-            next_a1 = self.agent1_pos
-            next_a2 = self.agent2_pos
-            push_from1, push_to1 = None, None
-            push_from2, push_to2 = None, None
-
-        # áp dụng nước đi cho agent 1
+        # áp dụng nước đi cho cả hai agent
         self.agent1_pos = next_a1
-        if push_to1 is not None and push_from1 in self.boxes:
-            old_owner = self.box_owners.get(push_from1, None)
-            self.boxes.remove(push_from1)
-            self.boxes.add(push_to1)
-            del self.box_owners[push_from1]
-
-            # nếu hộp được đẩy vào ô đích thì agent 1 chiếm quyền sở hữu
-            if push_to1 in self.targets:
-                self.box_owners[push_to1] = 1
-            else:
-                # nếu bị đẩy ra khỏi đích thì mất trạng thái hoàn thành
-                self.box_owners[push_to1] = None
-
-        # áp dụng nước đi cho agent 2
+        self._apply_push(1, push_from1, push_to1)
         self.agent2_pos = next_a2
-        if push_to2 is not None and push_from2 in self.boxes:
-            old_owner = self.box_owners.get(push_from2, None)
-            self.boxes.remove(push_from2)
-            self.boxes.add(push_to2)
-            del self.box_owners[push_from2]
-
-            # nếu hộp được đẩy vào ô đích thì agent 2 chiếm quyền sở hữu
-            if push_to2 in self.targets:
-                self.box_owners[push_to2] = 2
-            else:
-                self.box_owners[push_to2] = None
+        self._apply_push(2, push_from2, push_to2)
 
         self.current_step += 1
         return True
@@ -237,4 +238,5 @@ class SokobanTwoPlayerEnv:
         self.boxes = set(snap['boxes'])
         self.box_owners = dict(snap['owners'])
         self.current_step = snap['step']
+        self.last_conflict = snap.get('conflict')
         return True

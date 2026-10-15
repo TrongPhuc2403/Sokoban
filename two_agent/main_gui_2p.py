@@ -43,7 +43,7 @@ class SokobanTwoPlayerGUI:
         self.max_steps = max_steps
         self.env = SokobanTwoPlayerEnv(map_path, max_steps=max_steps)
 
-        # khung nhập số bước n ngay trên cửa sổ game (yêu cầu 6)
+        # Hop thoai nhap so buoc n
         self.entering_n = ask_steps
         self.n_input = str(self.env.max_steps)
 
@@ -99,7 +99,7 @@ class SokobanTwoPlayerGUI:
         self.step_delay = 400
         self.last_step_time = 0
 
-        # thời gian suy nghĩ của từng agent (ms), giới hạn 1000 ms mỗi bước (yêu cầu 7)
+        # Gioi han thoi gian suy nghi cua moi agent
         self.time_limit_ms = 1000
         self.time_agent1 = 0
         self.time_agent2 = 0
@@ -107,21 +107,11 @@ class SokobanTwoPlayerGUI:
         self.last_act2 = 'None'
 
     def _call_agent(self, mod, agent_id, state):
-        # hỗ trợ các giao thức gọi khác nhau từ các nhóm sinh viên
         if hasattr(mod, 'get_action'):
             try:
                 return mod.get_action(agent_id, state)
             except TypeError:
                 return mod.get_action(state)
-        elif hasattr(mod, f'Player{agent_id}'):
-            cls = getattr(mod, f'Player{agent_id}')
-            return cls(agent_id).get_action(state)
-        elif hasattr(mod, 'Player'):
-            cls = getattr(mod, 'Player')
-            try:
-                return cls(agent_id).get_action(state)
-            except TypeError:
-                return cls().get_action(state)
         return 'Wait'
 
     def _decide(self, mod, agent_id, state):
@@ -335,7 +325,19 @@ class SokobanTwoPlayerGUI:
         self.screen.blit(self.font_small.render(f"A1: {self.time_agent1} ms ({self.last_act1})", True, self.color_text_muted), (sb_x + 15, cur_y))
         cur_y += 18
         self.screen.blit(self.font_small.render(f"A2: {self.time_agent2} ms ({self.last_act2})", True, self.color_text_muted), (sb_x + 15, cur_y))
-        cur_y += 26
+        cur_y += 22
+
+        # tranh chap luot gan nhat: p ~ U(0,1)
+        conf = self.env.last_conflict
+        if conf:
+            kind = "cung day 1 hop" if conf['type'] == 'same_box' else "cung vao 1 o"
+            conf_txt = f"Tranh chap ({kind}): p={conf['p']:.3f} -> A{conf['winner']} di"
+            conf_col = self.color_agent1 if conf['winner'] == 1 else self.color_agent2
+        else:
+            conf_txt = "Tranh chap: khong"
+            conf_col = self.color_text_muted
+        self.screen.blit(self.font_small.render(conf_txt, True, conf_col), (sb_x + 15, cur_y))
+        cur_y += 24
 
         # chú thích màu hộp
         self.screen.blit(self.font_medium.render("Quy uoc mau hop:", True, (241, 196, 15)), (sb_x + 15, cur_y))
@@ -412,7 +414,7 @@ class SokobanTwoPlayerGUI:
         score_surf = self.font_medium.render(score_text, True, (240, 240, 240))
         self.screen.blit(score_surf, (modal_x + (modal_w - score_surf.get_width()) // 2, modal_y + 100))
 
-        # Lý do kết thúc trận đấu: luôn là đủ n bước theo đề
+        # Ly do ket thuc tran dau
         reason_text = f"Da du n = {self.env.max_steps} buoc. Ben nhieu hop tren dich hon thang."
         reason_surf = self.font_small.render(reason_text, True, (160, 170, 190))
         self.screen.blit(reason_surf, (modal_x + (modal_w - reason_surf.get_width()) // 2, modal_y + 138))
@@ -500,8 +502,7 @@ if __name__ == '__main__':
         print(f"Khong tim thay file ban do: {map_file}")
         sys.exit(1)
 
-    # yêu cầu 6: số bước n do người dùng nhập
-    # nếu không truyền qua dòng lệnh thì hiện khung nhập n ngay khi mở game
+    # Neu khong truyen so buoc tren dong lenh thi hien hop thoai nhap n
     try:
         gui = SokobanTwoPlayerGUI(map_path=map_file, max_steps=steps, player1_mod=p1_mod, player2_mod=p2_mod, ask_steps=not has_cli_steps)
         gui.run()
